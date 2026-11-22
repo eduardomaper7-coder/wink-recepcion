@@ -63,6 +63,15 @@ export interface ClientEmailContext {
   channel?: 'email' | 'whatsapp';
   /** Visita ya reservada: se confirma en vez de proponer huecos */
   visitAt?: Date | null;
+  /** El cliente ha preguntado por precio/coste o por plazos/duración */
+  clientAskedPriceOrTime?: boolean;
+}
+
+/** Detecta (sin IA) si el cliente pregunta por precio o por plazos, para responderle sin dar cifras. */
+export function asksPriceOrTime(text: string | null | undefined): boolean {
+  if (!text) return false;
+  const t = text.toLowerCase();
+  return /cu[aá]nto (me )?(costar[ií]a|cuesta|vale|saldr[ií]a)|precio|presupuesto aproximado|coste aproximado|cu[aá]nto tiempo|cu[aá]nto (durar[ií]a|tardar[ií]ais|llevar[ií]a)|plazo de (la )?obra|duraci[oó]n de (la )?obra/.test(t);
 }
 
 export function formatSlots(slots: { start: Date; end: Date }[]): string[] {
@@ -80,6 +89,9 @@ export async function composeClientEmail(c: ClientEmailContext): Promise<{ subje
       ? 'Contexto: el cliente habló antes con una persona de Wink, que nos ha trasladado su solicitud. Es el primer correo que recibe desde este buzón.'
       : 'Contexto: el cliente nos escribió directamente; esto es nuestra respuesta.',
     `Asunto original: ${c.originalSubject ?? '(sin asunto)'}`,
+    ...(c.clientAskedPriceOrTime
+      ? ['IMPORTANTE: el cliente pregunta cuánto costaría y/o cuánto duraría la obra. Respóndele en UNA frase, antes de la lista de documentación, que el presupuesto y los plazos los valoraremos después de la visita y del estudio del encargo. Sin cifras ni horquillas.']
+      : []),
     '',
     'Documentación e información que necesitamos (obligatoria):',
     ...(c.required.length ? c.required.map((r) => `- ${clientSafe(r.description)}${r.note ? ` (${clientSafe(r.note)})` : ''}`) : ['- (nada pendiente)']),

@@ -34,3 +34,11 @@ describe('despedida duplicada', () => {
     expect(stripClosing(body, 'Un saludo,\nEquipo Wink Group')).toBe('Estimada Lucía:\n\nTexto.\n\nQuedamos a su disposición.');
   });
 });
+
+import { asksPriceOrTime } from '@/agent/drafts';
+describe('pregunta de precio o plazo', () => {
+  it('detecta la pregunta del cliente', () => {
+    expect(asksPriceOrTime('¿Me podríais decir más o menos cuánto costaría y cuánto tiempo llevaría la obra?')).toBe(true);
+    expect(asksPriceOrTime('Tenemos un presupuesto de 60.000 €')).toBe(false);
+  });
+});

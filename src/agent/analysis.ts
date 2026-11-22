@@ -12,7 +12,7 @@ import { buildBaseChecklist, mergeAgentItems, type ChecklistTemplate } from './c
 import { BriefingSchema, ScopeSchema, ChecklistExtraSchema, type Briefing } from './schemas';
 import { SYSTEM_BRIEFING, SYSTEM_SCOPE, SYSTEM_CHECKLIST } from './prompts';
 import { briefingToMarkdown, scopeToMarkdown } from './render';
-import { composeClientEmail, internalContactRequest, saveDraft } from './drafts';
+import { asksPriceOrTime, composeClientEmail, internalContactRequest, saveDraft } from './drafts';
 import { sendDraft } from './send';
 import { parseAvailability, proposeSlots } from '@/calendar/slots';
 import { calendar } from '@/calendar/providers';
@@ -273,7 +273,13 @@ export async function runAnalysis(projectId: string, opts: AnalysisOptions) {
       const slots = (slotRows ?? []).map((s) => ({ start: new Date(s.starts_at), end: new Date(s.ends_at) }));
       const clientSaid = b.facts.filter((f) => !f.is_internal && f.field === 'request.needs').map((f) => f.value)[0] ?? null;
       const channel: 'email' | 'whatsapp' = b.project.wa_conversation_id && (b.project.origin === 'whatsapp' || !b.client?.email) ? 'whatsapp' : 'email';
+      let clientAskedPriceOrTime = false;
+      if (opts.replyToEmailId) {
+        const { data: orig } = await sb.from('emails').select('body_text').eq('id', opts.replyToEmailId).maybeSingle();
+        clientAskedPriceOrTime = asksPriceOrTime(orig?.body_text);
+      }
       const composed = await composeClientEmail({
+        clientAskedPriceOrTime,
         channel,
         visitAt: b.project.visit_at ? new Date(b.project.visit_at) : null,
         clientName: b.client?.full_name ?? null,
