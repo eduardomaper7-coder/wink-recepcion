@@ -395,7 +395,9 @@ export async function refreshTechnical(projectId: string, emailId: string, u: Te
           content: [
             {
               type: 'text',
-              text: `${dossier(b, { includeInternal: true })}\n\nINCOHERENCIAS DETECTADAS AUTOMÁTICAMENTE (inclúyelas):\n${inconsistencies.map((i) => `- ${i.description}`).join('\n') || '- ninguna'}\n\n${novedad}\n\nRedacta el briefing técnico actualizado.`,
+              text: `${dossier(b, { includeInternal: true })}\n\nINCOHERENCIAS DETECTADAS AUTOMÁTICAMENTE (inclúyelas):\n${inconsistencies.map((i) => `- ${i.description}`).join('\n') || '- ninguna'}\n\n${novedad}${
+                prevBriefing ? `\n\nBRIEFING ANTERIOR (JSON). Parte de él y cambia SOLO lo que la novedad afecta: mantén el resto igual, elimina de "dudas" las que la novedad responde y añade solo las dudas nuevas que surjan:\n${JSON.stringify(prevBriefing)}` : ''
+              }\n\nDevuelve el briefing técnico actualizado completo.`,
             },
           ],
           toolName: 'guardar_briefing',
@@ -416,7 +418,14 @@ export async function refreshTechnical(projectId: string, emailId: string, u: Te
           task: 'alcance',
           tier: 'smart',
           system: SYSTEM_SCOPE,
-          content: [{ type: 'text', text: `${dossier(b, { includeInternal: true })}\n\n${novedad}\n\nPropón el alcance técnico preliminar actualizado.` }],
+          content: [
+            {
+              type: 'text',
+              text: `${dossier(b, { includeInternal: true })}\n\n${novedad}${
+                prevScope ? `\n\nALCANCE ANTERIOR (JSON). Parte de él: conserva EXACTAMENTE el nombre de cada partida que siga vigente (aunque ajustes su detalle), añade partidas nuevas solo si la novedad las exige, quita solo las que la novedad descarte, y elimina de "a_confirmar" lo que la novedad ya confirma:\n${JSON.stringify({ incluye: prevScope.incluye, no_incluye: prevScope.no_incluye, a_confirmar: prevScope.a_confirmar, supuestos: prevScope.supuestos })}` : ''
+              }\n\nDevuelve el alcance técnico preliminar actualizado completo.`,
+            },
+          ],
           toolName: 'guardar_alcance',
           toolDescription: 'Guarda el alcance preliminar actualizado (borrador)',
           schema: ScopeSchema,

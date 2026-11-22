@@ -156,8 +156,9 @@ export async function handleReply(o: {
       else parts.push('briefing NO regenerado porque estaba editado a mano: revisar las notas nuevas');
       if (r.alcance === 'actualizado') {
         parts.push('alcance actualizado');
-        if (r.partidasNuevas.length) parts.push(`partidas nuevas: ${r.partidasNuevas.join('; ')}`);
-        if (r.partidasQuitadas.length) parts.push(`partidas que salen: ${r.partidasQuitadas.join('; ')}`);
+        const list = (xs: string[]) => (xs.length > 4 ? `${xs.slice(0, 4).join('; ')} y ${xs.length - 4} más` : xs.join('; '));
+        if (r.partidasNuevas.length) parts.push(`partidas nuevas: ${list(r.partidasNuevas)}`);
+        if (r.partidasQuitadas.length) parts.push(`partidas que salen: ${list(r.partidasQuitadas)}`);
       } else parts.push('alcance NO regenerado porque estaba editado a mano');
       news.push(`Información de ${author}: ${parts.join(' · ')}`);
       return { output: r as unknown as Record<string, unknown>, detail: parts.join(' · ') };
