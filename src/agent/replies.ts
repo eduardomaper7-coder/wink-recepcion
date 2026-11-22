@@ -12,7 +12,7 @@ import { isInternalAddress, type identifySender } from './intake';
 import type { StaffMember } from '@/core/settings';
 import { classifyEmailAttachments, describeSummary } from './documents';
 import { loadBundle, syncEntitiesFromFacts } from './repo';
-import { refreshPending, runAnalysis, mustAskStaffFirst } from './analysis';
+import { refreshPending, runAnalysis, mustAskStaffFirst, isTechnicalUpdate, refreshTechnical } from './analysis';
 import { internalUpdateNotice, saveDraft, visitConfirmationEmail } from './drafts';
 import { sendDraft } from './send';
 import { calendar } from '@/calendar/providers';
@@ -133,6 +133,34 @@ export async function handleReply(o: {
         news.push('Toda la documentación obligatoria recibida: expediente listo para la visita');
       }
       return { output: { recibidos: received, abiertos: after }, detail: `${received} recibido(s) · ${after} abierto(s)` };
+    },
+    o.projectId,
+  );
+
+  // El personal aporta información técnica (p. ej. desde la visita): se rehacen briefing y alcance.
+  await runStep<Record<string, unknown>>(
+    o.emailId,
+    'r5_tecnico',
+    async () => {
+      if (o.identity.senderType !== 'personal') return { output: { accion: 'ninguna' }, detail: 'Sin cambios técnicos' };
+      let text = o.body ?? '';
+      if (!text) {
+        const { data: em } = await sb.from('emails').select('body_text').eq('id', o.emailId).single();
+        text = em?.body_text ?? '';
+      }
+      if (!isTechnicalUpdate(text, docs.total)) return { output: { accion: 'ninguna' }, detail: 'Mensaje sin información técnica: solo nota interna' };
+      const author = o.identity.staff?.full_name ?? 'personal de Wink';
+      const r = await refreshTechnical(o.projectId, o.emailId, { author, channel: o.channel ?? 'email', when: new Date(o.receivedAt ?? Date.now()), text, newDocs: docs.total });
+      const parts: string[] = [];
+      if (r.briefing === 'actualizado') parts.push(`briefing actualizado (dudas abiertas: ${r.dudas[0]} → ${r.dudas[1]})`);
+      else parts.push('briefing NO regenerado porque estaba editado a mano: revisar las notas nuevas');
+      if (r.alcance === 'actualizado') {
+        parts.push('alcance actualizado');
+        if (r.partidasNuevas.length) parts.push(`partidas nuevas: ${r.partidasNuevas.join('; ')}`);
+        if (r.partidasQuitadas.length) parts.push(`partidas que salen: ${r.partidasQuitadas.join('; ')}`);
+      } else parts.push('alcance NO regenerado porque estaba editado a mano');
+      news.push(`Información de ${author}: ${parts.join(' · ')}`);
+      return { output: r as unknown as Record<string, unknown>, detail: parts.join(' · ') };
     },
     o.projectId,
   );

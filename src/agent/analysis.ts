@@ -9,7 +9,7 @@ import { loadBundle, syncEntitiesFromFacts, type ProjectBundle } from './repo';
 import { detectInconsistencies, bestValue } from './facts';
 import { computePending, itemsToRequest, type RequiredTemplate } from './pending';
 import { buildBaseChecklist, mergeAgentItems, type ChecklistTemplate } from './checklist';
-import { BriefingSchema, ScopeSchema, ChecklistExtraSchema, type Briefing } from './schemas';
+import { BriefingSchema, ScopeSchema, ChecklistExtraSchema, type Briefing, type Scope } from './schemas';
 import { SYSTEM_BRIEFING, SYSTEM_SCOPE, SYSTEM_CHECKLIST } from './prompts';
 import { briefingToMarkdown, scopeToMarkdown } from './render';
 import { asksPriceOrTime, composeClientEmail, internalContactRequest, saveDraft } from './drafts';
@@ -327,3 +327,113 @@ export async function runAnalysis(projectId: string, opts: AnalysisOptions) {
 }
 
 export type { AppSettings, Briefing };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Actualización técnica: el personal (p. ej. el jefe de obra desde la visita) aporta
+// información nueva → se rehacen briefing y alcance. El correo al cliente NO se toca.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface TechnicalUpdate {
+  author: string; // "Javier Gómez (jefe de obra)"
+  channel: 'whatsapp' | 'email';
+  when: Date;
+  text: string; // lo que ha escrito (vacío si solo manda fotos)
+  newDocs: number;
+}
+
+/** ¿El mensaje del personal trae información técnica? Un "ok" o "llego en 10 min" no rehace nada. */
+export function isTechnicalUpdate(text: string | null | undefined, newDocs: number): boolean {
+  const t = (text ?? '').trim();
+  if (newDocs > 0) return true;
+  if (t.length < 60) return false;
+  return t.split(/\s+/).length >= 10;
+}
+
+const updateHeader = (u: TechnicalUpdate) => {
+  const when = u.when.toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return `> **Actualizado** con la información de ${u.author} (${u.channel === 'whatsapp' ? 'WhatsApp' : 'correo'}, ${when}).`;
+};
+
+/** El texto guardado ya no coincide con lo generado: alguien lo ha editado a mano. */
+const editedByHand = (md: string | null, generated: string) => !!md && !md.trimEnd().endsWith(generated.trimEnd());
+
+export async function refreshTechnical(projectId: string, emailId: string, u: TechnicalUpdate) {
+  const sb = supabaseAdmin();
+  let b = await loadBundle(projectId);
+  await syncEntitiesFromFacts(b);
+  b = await loadBundle(projectId);
+  const inconsistencies = await refreshInconsistencies(b);
+  const { data: cur } = await sb.from('projects').select('briefing,briefing_md,scope,scope_md').eq('id', projectId).single();
+  const prevBriefing = (cur?.briefing ?? null) as Briefing | null;
+  const prevScope = (cur?.scope ?? null) as Scope | null;
+  const briefingEdited = prevBriefing ? editedByHand(cur?.briefing_md ?? null, briefingToMarkdown(prevBriefing)) : false;
+  const scopeEdited = prevScope ? editedByHand(cur?.scope_md ?? null, scopeToMarkdown(prevScope)) : false;
+
+  const novedad = [
+    `NOVEDAD — información aportada por ${u.author} (personal de Wink) por ${u.channel === 'whatsapp' ? 'WhatsApp' : 'correo'}${u.newDocs ? `, con ${u.newDocs} archivo(s) nuevo(s) ya incluidos en DOCUMENTOS` : ''}:`,
+    u.text.trim() || '(solo archivos, sin texto)',
+    '',
+    `Es información MÁS RECIENTE que la anterior y viene de quien ha estado en la vivienda. Úsala para: resolver las dudas que contesta (quítalas de "dudas"), corregir o precisar supuestos anteriores, y añadir lo nuevo. Cita su fuente como «Visita – ${u.author}». Lo que diga como opinión técnica ("no parece de carga") se recoge como observación pendiente de confirmar por el arquitecto, no como hecho cerrado.`,
+  ].join('\n');
+
+  const result: { briefing: 'actualizado' | 'editado_a_mano'; alcance: 'actualizado' | 'editado_a_mano'; dudas: [number, number]; partidasNuevas: string[]; partidasQuitadas: string[] } = {
+    briefing: briefingEdited ? 'editado_a_mano' : 'actualizado',
+    alcance: scopeEdited ? 'editado_a_mano' : 'actualizado',
+    dudas: [prevBriefing?.dudas.length ?? 0, prevBriefing?.dudas.length ?? 0],
+    partidasNuevas: [],
+    partidasQuitadas: [],
+  };
+
+  const tasks: Promise<unknown>[] = [];
+  if (!briefingEdited) {
+    tasks.push(
+      llm()
+        .run({
+          task: 'briefing',
+          tier: 'smart',
+          system: SYSTEM_BRIEFING,
+          content: [
+            {
+              type: 'text',
+              text: `${dossier(b, { includeInternal: true })}\n\nINCOHERENCIAS DETECTADAS AUTOMÁTICAMENTE (inclúyelas):\n${inconsistencies.map((i) => `- ${i.description}`).join('\n') || '- ninguna'}\n\n${novedad}\n\nRedacta el briefing técnico actualizado.`,
+            },
+          ],
+          toolName: 'guardar_briefing',
+          toolDescription: 'Guarda el briefing técnico actualizado del expediente',
+          schema: BriefingSchema,
+          maxTokens: 4000,
+        })
+        .then(async (r) => {
+          result.dudas = [prevBriefing?.dudas.length ?? 0, r.data.dudas.length];
+          await sb.from('projects').update({ briefing: r.data, briefing_md: `${updateHeader(u)}\n\n${briefingToMarkdown(r.data)}` }).eq('id', projectId);
+        }),
+    );
+  }
+  if (!scopeEdited) {
+    tasks.push(
+      llm()
+        .run({
+          task: 'alcance',
+          tier: 'smart',
+          system: SYSTEM_SCOPE,
+          content: [{ type: 'text', text: `${dossier(b, { includeInternal: true })}\n\n${novedad}\n\nPropón el alcance técnico preliminar actualizado.` }],
+          toolName: 'guardar_alcance',
+          toolDescription: 'Guarda el alcance preliminar actualizado (borrador)',
+          schema: ScopeSchema,
+          maxTokens: 3000,
+        })
+        .then(async (r) => {
+          const before = new Set((prevScope?.incluye ?? []).map((i) => i.partida.toLowerCase()));
+          const after = new Set(r.data.incluye.map((i) => i.partida.toLowerCase()));
+          result.partidasNuevas = r.data.incluye.filter((i) => !before.has(i.partida.toLowerCase())).map((i) => i.partida);
+          result.partidasQuitadas = (prevScope?.incluye ?? []).filter((i) => !after.has(i.partida.toLowerCase())).map((i) => i.partida);
+          await sb.from('projects').update({ scope: { ...r.data, borrador: true }, scope_md: `${updateHeader(u)}\n\n${scopeToMarkdown(r.data)}` }).eq('id', projectId);
+        }),
+    );
+  }
+  const settled = await Promise.allSettled(tasks);
+  const failed = settled.find((s) => s.status === 'rejected') as PromiseRejectedResult | undefined;
+  if (failed) throw failed.reason;
+  await audit('expediente_actualizado_por_personal', { projectId, payload: { emailId, autor: u.author, canal: u.channel, ...result } });
+  return result;
+}

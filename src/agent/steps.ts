@@ -24,6 +24,7 @@ export const REPLY_STEPS: StepDef[] = [
   { key: 'r1_vinculo', task: 1, label: 'Vinculado al expediente' },
   { key: 'r2_documentos', task: 2, label: 'Documentos nuevos clasificados' },
   { key: 'r4_pendientes', task: 4, label: 'Pendientes actualizados' },
+  { key: 'r5_tecnico', task: 5, label: 'Briefing y alcance actualizados' },
   { key: 'r6_visita', task: 6, label: 'Visita' },
   { key: 'r7_aviso', task: 7, label: 'Aviso al arquitecto y al responsable' },
 ];
