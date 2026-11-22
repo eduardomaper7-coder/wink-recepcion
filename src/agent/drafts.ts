@@ -123,7 +123,7 @@ export async function composeClientEmail(c: ClientEmailContext): Promise<{ subje
   const subject = c.channel !== 'whatsapp' && c.originalSubject && !c.isFirstContactFromWink ? `Re: ${c.originalSubject.replace(/^(re|rv|fw|fwd):\s*/i, '')}` : last!.asunto;
   // Última red de seguridad: ninguna anotación interna sale en el correo
   const signature = c.channel === 'whatsapp' ? '— Equipo Wink' : c.signature;
-  return { subject: clientSafe(subject)!, body: `${clientSafe(last!.cuerpo.trim())}\n\n${signature}`, flags, model, usage };
+  return { subject: clientSafe(subject)!, body: `${stripClosing(clientSafe(last!.cuerpo.trim())!, signature)}\n\n${signature}`, flags, model, usage };
 }
 
 /** Solicitud interna (plantilla fija, sin LLM): faltan datos de contacto del cliente. */
@@ -187,4 +187,15 @@ export function reminderEmail(opts: { clientName: string | null; items: string[]
     '',
     opts.signature,
   ].join('\n');
+}
+
+const CLOSING = /^(un\s+)?(cordial\s+|afectuoso\s+)?saludos?[,.!]?$|^atentamente[,.]?$|^reciba un cordial saludo[,.]?$|^saludos cordiales[,.]?$/i;
+
+/** Si la firma ya trae despedida ("Un saludo,"), quita la despedida que haya escrito el modelo al final del cuerpo. */
+export function stripClosing(body: string, signature: string): string {
+  const firstSig = signature.split('\n')[0].trim();
+  if (!CLOSING.test(firstSig)) return body;
+  const paras = body.split(/\n\s*\n/);
+  while (paras.length > 1 && CLOSING.test(paras[paras.length - 1].trim())) paras.pop();
+  return paras.join('\n\n').trim();
 }

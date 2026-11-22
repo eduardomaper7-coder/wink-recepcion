@@ -26,3 +26,11 @@ describe('anotaciones internas fuera de los correos al cliente', () => {
     expect(checkClientEmail('Visita en Calle X 4 (según correo; no consta en la foto) el martes').map((f) => f.code)).toContain('nota_interna');
   });
 });
+
+import { stripClosing } from '@/agent/drafts';
+describe('despedida duplicada', () => {
+  it('quita la despedida del modelo si la firma ya la trae', () => {
+    const body = 'Estimada Lucía:\n\nTexto.\n\nQuedamos a su disposición.\n\nUn cordial saludo.';
+    expect(stripClosing(body, 'Un saludo,\nEquipo Wink Group')).toBe('Estimada Lucía:\n\nTexto.\n\nQuedamos a su disposición.');
+  });
+});

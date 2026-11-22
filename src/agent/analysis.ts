@@ -14,7 +14,7 @@ import { SYSTEM_BRIEFING, SYSTEM_SCOPE, SYSTEM_CHECKLIST } from './prompts';
 import { briefingToMarkdown, scopeToMarkdown } from './render';
 import { composeClientEmail, internalContactRequest, saveDraft } from './drafts';
 import { sendDraft } from './send';
-import { proposeSlots } from '@/calendar/slots';
+import { parseAvailability, proposeSlots } from '@/calendar/slots';
 import { calendar } from '@/calendar/providers';
 import { loadSettings, type AppSettings } from '@/core/settings';
 import { FIELD_LABELS, type FactField } from './fields';
@@ -204,7 +204,10 @@ export async function runAnalysis(projectId: string, opts: AnalysisOptions) {
       if (!b.project.visit_at) try {
         const now = new Date();
         const busy = await calendar().busy(now, new Date(now.getTime() + (settings.visit_hours.lookahead_days + 4) * 86_400_000));
-        slots = proposeSlots(now, busy, settings.visit_hours, settings.visit_duration_min);
+        const pref = parseAvailability(bestValue(b.facts, 'client.availability')?.value);
+        slots = proposeSlots(now, busy, settings.visit_hours, settings.visit_duration_min, pref);
+        // Si la preferencia deja sin huecos, se proponen los normales (el cliente puede pedir otro)
+        if (!slots.length && pref) slots = proposeSlots(now, busy, settings.visit_hours, settings.visit_duration_min);
       } catch (e) {
         log.warn('No se pudo consultar la agenda', { error: String(e) });
       }

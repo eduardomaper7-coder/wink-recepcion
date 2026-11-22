@@ -57,7 +57,7 @@ function rawJsonSchema(schema: z.ZodType): Record<string, unknown> {
 export function restoreNulls(data: unknown, node: unknown): unknown {
   if (!node || typeof node !== 'object') return data;
   const n = node as Record<string, unknown>;
-  if (Array.isArray(n.type) && n.type.includes('string') && n.type.includes('null') && data === '') return null;
+  if (Array.isArray(n.type) && n.type.includes('string') && n.type.includes('null') && (data === '' || (typeof data === 'string' && /^(null|n\/a)$/i.test(data.trim())))) return null;
   if (Array.isArray(n.anyOf)) {
     if (data === null) return null;
     const branch = (n.anyOf as Record<string, unknown>[]).find((b) => b.type !== 'null');

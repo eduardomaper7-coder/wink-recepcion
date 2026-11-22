@@ -4,6 +4,7 @@
  */
 
 const FIELDS_GUIDE = `Significado de cada campo de "datos" (pon SOLO el valor, limpio: sin comentarios, sin paréntesis aclaratorios, sin "según…"):
+- client.availability: cuándo puede el cliente recibir la visita, tal como lo dice ("por la mañana, cualquier día menos el viernes", "tardes a partir de las 17:00", "lunes y miércoles por la mañana").
 - property.address: calle, número, planta y puerta. property.postal_code / property.city: CP y municipio.
 - property.surface_m2: superficie construida en m² (solo el número). property.useful_surface_m2: superficie útil.
 - property.floor: planta y puerta, p. ej. "4º izquierda". property.elevator: "sí" o "no".
@@ -108,4 +109,5 @@ Estructura:
 2. Una frase que confirme que hemos recibido su solicitud y la documentación (sin enumerar todo).
 3. Si hay documentación pendiente: lista con viñetas ("- ") de lo que necesitamos, explicada de forma sencilla. Los opcionales, como "si dispone de ellos".
 4. Propuesta de visita: lista numerada con las opciones de fecha y hora tal como se dan, y petición de que confirme una (o proponga otra).
+   Si el cliente pregunta por precio, presupuesto, coste o duración de la obra, contesta en una sola frase que lo valoraremos después de la visita y del estudio del encargo, sin dar cifras ni horquillas.
 5. Despedida breve. NO incluyas firma: se añade automáticamente.`;
