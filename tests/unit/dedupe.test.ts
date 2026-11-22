@@ -28,4 +28,14 @@ describe('findDuplicate — mismo encargo por dos vías', () => {
     const m = findDuplicate({ clientEmail: 'lucia@gmail.com', clientPhone: null, address: null, cadastralRef: null }, [cand({ clientEmail: 'lucia@gmail.com', createdAt: '2026-09-01T00:00:00Z' })], now, 30);
     expect(m).toBeNull();
   });
+
+  it('mismo cliente pero otro inmueble → encargo nuevo', () => {
+    const m = findDuplicate({ clientEmail: 'lucia@gmail.com', clientPhone: null, address: 'Calle Lagasca 87, 6º', cadastralRef: null }, [cand({ clientEmail: 'lucia@gmail.com', address: 'C/ Rodríguez San Pedro 48, 4º izq.' })], now, 30);
+    expect(m).toBeNull();
+  });
+
+  it('mismo cliente y misma dirección → fusionar', () => {
+    const m = findDuplicate({ clientEmail: 'lucia@gmail.com', clientPhone: null, address: 'calle Rodriguez San Pedro 48', cadastralRef: null }, [cand({ clientEmail: 'lucia@gmail.com', address: 'C/ Rodríguez San Pedro 48, 4º izq.' })], now, 30);
+    expect(m?.decision).toBe('fusionar');
+  });
 });

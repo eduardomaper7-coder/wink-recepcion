@@ -66,9 +66,15 @@ export function scoreDuplicate(input: DedupeInput, c: DedupeCandidate): { score:
     score += 0.6;
     reasons.push('misma referencia catastral');
   }
-  if (addressesMatch(input.address, c.address)) {
+  const sameAddress = addressesMatch(input.address, c.address);
+  if (sameAddress) {
     score += 0.5;
     reasons.push('misma dirección');
+  }
+  // Mismo cliente pero OTRO inmueble (ambas direcciones conocidas y distintas, sin catastro común): es otro encargo.
+  const sameCadastral = reasons.includes('misma referencia catastral');
+  if (!sameAddress && !sameCadastral && normalizeAddress(input.address) && normalizeAddress(c.address)) {
+    return { score: 0, reasons: ['otro inmueble'] };
   }
   return { score: Math.min(score, 1), reasons };
 }
