@@ -36,6 +36,11 @@ export function toStructuredSchema(node: unknown): unknown {
       ? Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([pk, pv]) => [pk, toStructuredSchema(pv)]))
       : toStructuredSchema(v);
   }
+  // La API limita a 16 los parámetros con uniones: los textos opcionales se piden como "" y se restauran a null al recibirlos.
+  if (Array.isArray(out.type) && out.type.length === 2 && out.type.includes('string') && out.type.includes('null')) {
+    out.type = 'string';
+    notes.push('cadena vacía "" si no consta');
+  }
   if (notes.length) out.description = [src.description, `(${notes.join(', ')})`].filter(Boolean).join(' ');
   if (out.type === 'object' || out.properties) {
     out.additionalProperties = false;
@@ -44,8 +49,26 @@ export function toStructuredSchema(node: unknown): unknown {
   return out;
 }
 
-function jsonSchemaFor(schema: z.ZodType): Record<string, unknown> {
-  return toStructuredSchema(z.toJSONSchema(schema, { target: 'draft-7', io: 'input' })) as Record<string, unknown>;
+function rawJsonSchema(schema: z.ZodType): Record<string, unknown> {
+  return z.toJSONSchema(schema, { target: 'draft-7', io: 'input' }) as Record<string, unknown>;
+}
+
+/** Deshace la conversión de toStructuredSchema: "" → null donde el esquema original admitía null en un texto. */
+export function restoreNulls(data: unknown, node: unknown): unknown {
+  if (!node || typeof node !== 'object') return data;
+  const n = node as Record<string, unknown>;
+  if (Array.isArray(n.type) && n.type.includes('string') && n.type.includes('null') && data === '') return null;
+  if (Array.isArray(n.anyOf)) {
+    if (data === null) return null;
+    const branch = (n.anyOf as Record<string, unknown>[]).find((b) => b.type !== 'null');
+    return restoreNulls(data, branch);
+  }
+  if (Array.isArray(data) && n.items) return data.map((d) => restoreNulls(d, n.items));
+  if (data && typeof data === 'object' && !Array.isArray(data) && n.properties) {
+    const props = n.properties as Record<string, unknown>;
+    return Object.fromEntries(Object.entries(data as Record<string, unknown>).map(([k, v]) => [k, k in props ? restoreNulls(v, props[k]) : v]));
+  }
+  return data;
 }
 
 /**
@@ -65,7 +88,8 @@ export class AnthropicLlm implements Llm {
 
   async run<T>(task: LlmTask<T>): Promise<LlmResult<T>> {
     const model = this.models[task.tier];
-    const schema = jsonSchemaFor(task.schema);
+    const raw = rawJsonSchema(task.schema);
+    const schema = toStructuredSchema(raw) as Record<string, unknown>;
     const messages: Anthropic.Messages.MessageParam[] = [{ role: 'user', content: toBlocks(task.content) }];
     let usage = { input: 0, output: 0 };
     let maxTokens = task.maxTokens ?? 4096;
@@ -97,7 +121,7 @@ export class AnthropicLlm implements Llm {
       } catch {
         json = undefined;
       }
-      const parsed = task.schema.safeParse(json);
+      const parsed = task.schema.safeParse(restoreNulls(json, raw));
       if (parsed.success) return { data: parsed.data, model, usage };
 
       const issues = parsed.error.issues.slice(0, 8).map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
