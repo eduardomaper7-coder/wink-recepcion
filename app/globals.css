@@ -1,0 +1,62 @@
+@import 'tailwindcss';
+
+/* Identidad de Wink: negro tinta sobre crema, piedra como color secundario. */
+@theme {
+  --color-ink: #111111;
+  --color-cream: #f6f3ee;
+  --color-sand: #ece6dc;
+  --color-stone: #8a8178;
+  --color-line: #ddd6cc;
+  --color-paper: #fdfcfa;
+  --color-ok: #3f6b4f;
+  --color-warn: #9a3412;
+  --color-info: #35506b;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+html,
+body {
+  background: var(--color-cream);
+  color: var(--color-ink);
+}
+
+.prose-wink h2 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 1.1rem 0 0.4rem;
+  letter-spacing: 0.01em;
+}
+.prose-wink ul {
+  margin: 0.2rem 0 0.6rem;
+}
+.prose-wink li {
+  margin: 0.15rem 0 0.15rem 1rem;
+  list-style: disc;
+}
+.prose-wink blockquote {
+  border-left: 3px solid var(--color-warn);
+  background: #fff7ed;
+  color: var(--color-warn);
+  padding: 0.4rem 0.7rem;
+  margin: 0.2rem 0 0.8rem;
+  font-size: 0.85rem;
+}
+.prose-wink em {
+  color: var(--color-stone);
+  font-style: normal;
+  font-size: 0.8rem;
+}
+
+@keyframes wink-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-pop {
+  animation: wink-pop 0.35s ease-out both;
+}
