@@ -107,15 +107,19 @@ export async function findProjectForWhatsApp(opts: { waConversationId?: string |
 export async function projectOptionsForStaff(staffId: string) {
   const sb = supabaseAdmin();
   const since = new Date(Date.now() - 12 * 3600_000).toISOString();
+  // Todos los expedientes activos; primero los suyos y los que tienen visita próxima, luego los más recientes
   const { data } = await sb
     .from('projects')
-    .select('id,code,title,visit_at,responsible_staff_id,status')
+    .select('id,code,title,visit_at,responsible_staff_id,status,updated_at')
     .in('status', ACTIVE)
     .is('merged_into_id', null)
-    .or(`responsible_staff_id.eq.${staffId},visit_at.gte.${since}`)
-    .order('visit_at', { ascending: true, nullsFirst: false })
-    .limit(10);
-  return (data ?? []).map((p) => ({ id: p.id, code: p.code, title: p.title, visitAt: p.visit_at }));
+    .order('updated_at', { ascending: false })
+    .limit(30);
+  const score = (p: { responsible_staff_id: string | null; visit_at: string | null }) =>
+    (p.responsible_staff_id === staffId ? 2 : 0) + (p.visit_at && p.visit_at >= since ? 1 : 0);
+  return [...(data ?? [])]
+    .sort((a, b) => score(b) - score(a))
+    .map((p) => ({ id: p.id, code: p.code, title: p.title, visitAt: p.visit_at }));
 }
 
 /** Envía un texto aprobado a la conversación de WhatsApp (a través de la app de WhatsApp). */
